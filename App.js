@@ -30,32 +30,7 @@ import {
 } from 'react-native/Libraries/NewAppScreen';
 
 import { NativeModules } from 'react-native';
-
-const Section = ({children, title}): Node => {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-};
+import colors from './assets/colors/colors';
 
 const App: () => Node = () => {
   const isDarkMode = useColorScheme() === 'dark';
@@ -67,34 +42,69 @@ const App: () => Node = () => {
   return (
     <SafeAreaView style={backgroundStyle}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <ScrollView
+      <ScrollView 
         contentInsetAdjustmentBehavior="automatic"
         style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <AskPermissions />
-          <Section title="Polar BLE SDK">
-            <SearchForDeviceButton />
-          </Section>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
+        
+        <View style={{
+          backgroundColor: isDarkMode ? Colors.black : Colors.white,
+        }}>
+          <View style={styles.sectionContainer}>
+            <Text style={[styles.sectionTitle,
+                {
+                  color: isDarkMode ? Colors.white : Colors.black,
+                },]}>Polar BLE SDK Example</Text>
+              <AskPermissions />
+              <PolarBleSdkCommands />
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+      );
 };
 
 const AskPermissions = () => {
+ const isDarkMode = useColorScheme() === 'dark';
     if (Platform.OS === "android") {
         return (
-            <Section title="Get Permissions">
-                <Button title="request permissions" onPress={requestBluetoothPermission} />
-            </Section>
+          <View style={styles.sectionContainer}>
+            <Text style={[ styles.sectionTitle,
+              {
+                color: isDarkMode ? Colors.white : Colors.black,
+              },
+              ]}>Get Permissions
+              </Text>
+            <View style={{margin:10}}/>
+            <Button
+              title="Get Permissions"
+              color="#008080"
+              onPress={requestBluetoothPermission}
+            />
+          </View>
         )
     } else {
         return null;
     }
+};
+
+const PolarBleSdkCommands = () => {
+ const isDarkMode = useColorScheme() === 'dark';
+        return (
+        <View style={styles.sectionContainer}>
+          <Text style={[ styles.sectionTitle,
+          {
+            color: isDarkMode ? Colors.white : Colors.black,
+          },
+          ]}>Polar BLE SDK commands</Text>
+          <View style={{margin:10}}/>
+          <SearchForDeviceButton />
+          <View style={{margin:5}}/>
+          <ConnectToDeviceButton />
+          <View style={{margin:5}} />
+          <StartEcgStreamButton />
+          <View style={{margin:5}}/>
+        </View>
+         )
 };
 
 const SearchForDeviceButton = () => {
@@ -106,7 +116,37 @@ const SearchForDeviceButton = () => {
   return (
     <Button
       title="Search for BLE devices"
-      color="#841584"
+      color={colors.button}
+      onPress={onPress}
+    />
+  );
+};
+
+const ConnectToDeviceButton = () => {
+  const { PolarBleSdkModule } = NativeModules;
+  const onPress = () => {
+    PolarBleSdkModule.connectToDevice('968BEA2E');
+  };
+
+  return (
+    <Button
+      title="Connect to BLE device"
+      color={colors.button}
+      onPress={onPress}
+    />
+  );
+};
+
+const StartEcgStreamButton = () => {
+  const { PolarBleSdkModule } = NativeModules;
+  const onPress = () => {
+    PolarBleSdkModule.startEcgStream('968BEA2E');
+  };
+
+  return (
+    <Button
+      title="Start ECG stream"
+      color={colors.button}
       onPress={onPress}
     />
   );

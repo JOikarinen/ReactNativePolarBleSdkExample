@@ -14,6 +14,7 @@ class PolarBleSdkModule: NSObject {
   private var api = PolarBleApiDefaultImpl.polarImplementation(DispatchQueue.main, features: Features.allFeatures.rawValue)
   private var isSearchOn: Bool = false
   private var searchDisposable: Disposable?
+  private let disposeBag = DisposeBag()
   
   override init() {
     super.init()
@@ -26,7 +27,6 @@ class PolarBleSdkModule: NSObject {
     api.deviceHrObserver = self
     //api.logger = self
   }
-  
   
   @objc(searchForDevice)
   func searchForDevice() -> Void {
@@ -54,12 +54,48 @@ class PolarBleSdkModule: NSObject {
   }
   
   @objc
+  func connectToDevice(_ deviceId: String) -> Void {
+    do {
+      try api.connectToDevice(deviceId)
+    } catch let err {
+      NSLog("Failed to connect to \(deviceId). Reason \(err)")
+    }
+  }
+  
+  @objc
+  func startEcgStream(_ deviceId: String) -> Void {
+    getStreamSettings(deviceId: deviceId, feature:  DeviceStreamingFeature.ecg)
+      .asObservable()
+      .flatMap({
+        (settings) -> Observable<PolarEcgData> in
+        return self.api.startEcgStreaming(deviceId, settings: settings)
+      }).observe(on: MainScheduler.instance)
+      .subscribe{ e in
+        switch e {
+        case .next(let data):
+          for µv in data.samples {
+            NSLog("ECG    µV: \(µv)")
+          }
+        case .error(let err):
+          NSLog("ECG stream failed: \(err)")
+        case .completed:
+          NSLog("ECG stream completed")
+        }
+      }.disposed(by: disposeBag)
+  }
+  
+  fileprivate func getStreamSettings(deviceId: String, feature: PolarBleSdk.DeviceStreamingFeature) -> Single<PolarSensorSetting> {
+    NSLog("Stream settings fetch for \(feature)")
+    return api.requestStreamSettings(deviceId, feature: feature)
+      .map { settings -> PolarSensorSetting in settings.maxSettings() }
+  }
+  
+  @objc
   func constantsToExport() -> [String: Any]! {
     return ["someKey": "someValue"]
   }
   
 }
-
 
 // MARK: - PolarBleApiPowerStateObserver
 extension PolarBleSdkModule : PolarBleApiPowerStateObserver {

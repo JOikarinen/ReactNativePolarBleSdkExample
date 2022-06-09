@@ -1,22 +1,27 @@
 package com.reactnativepolarblesdk
 
 import android.util.Log
+import android.util.Pair
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleApiDefaultImpl
+import com.polar.sdk.api.errors.PolarInvalidArgument
 import com.polar.sdk.api.model.PolarDeviceInfo
+import com.polar.sdk.api.model.PolarEcgData
 import com.polar.sdk.api.model.PolarHrData
+import com.polar.sdk.api.model.PolarSensorSetting
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.core.Flowable
+import io.reactivex.rxjava3.core.Single
 import java.util.*
 
 class PolarBleSdkModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
     companion object {
         private const val TAG = "PolarBleSdkModule"
         private const val API_LOGGER_TAG = "API LOGGER"
-        private const val PERMISSION_REQUEST_CODE = 1
     }
 
     private val api: PolarBleApi by lazy {
@@ -92,6 +97,64 @@ class PolarBleSdkModule(reactContext: ReactApplicationContext) : ReactContextBas
                 },
                 { Log.d(TAG, "complete") }
             )
+    }
 
+    @ReactMethod
+    fun connectToDevice(deviceId: String) {
+        Log.d(TAG, "connectToDevice called")
+        try {
+            api.connectToDevice(deviceId)
+        } catch (polarInvalidArgument: PolarInvalidArgument) {
+            Log.e(TAG, "Failed to connect. Reason $polarInvalidArgument ")
+        }
+    }
+
+    @ReactMethod
+    fun startEcgStream(deviceId: String) {
+        Log.d(TAG, "startEcgStream called")
+        requestStreamSettings(deviceId, PolarBleApi.DeviceStreamingFeature.ECG)
+            .flatMap { settings: PolarSensorSetting ->
+                api.startEcgStreaming(deviceId, settings)
+            }
+            .subscribe(
+                { polarEcgData: PolarEcgData ->
+                    for (microVolts in polarEcgData.samples) {
+                        Log.d(TAG, "    yV: $microVolts")
+                    }
+                },
+                { error: Throwable ->
+                    Log.e(TAG, "ECG stream failed. Reason $error")
+                },
+                { Log.d(TAG, "ECG stream complete") }
+            )
+    }
+
+    private fun requestStreamSettings(identifier: String, feature: PolarBleApi.DeviceStreamingFeature): Flowable<PolarSensorSetting> {
+        val availableSettings = api.requestStreamSettings(identifier, feature)
+            .observeOn(AndroidSchedulers.mainThread())
+            .onErrorReturn { error: Throwable ->
+                val errorString = "Settings are not available for feature $feature. REASON: $error"
+                Log.w(TAG, errorString)
+                PolarSensorSetting(emptyMap())
+            }
+        val allSettings = api.requestFullStreamSettings(identifier, feature)
+            .onErrorReturn { error: Throwable ->
+                Log.w(TAG, "Full stream settings are not available for feature $feature. REASON: $error")
+                PolarSensorSetting(emptyMap())
+            }
+        return Single.zip(availableSettings, allSettings) { available: PolarSensorSetting, all: PolarSensorSetting ->
+            if (available.settings.isEmpty()) {
+                throw Throwable("Settings are not available")
+            } else {
+                Log.d(TAG, "Feature " + feature + " available settings " + available.settings)
+                Log.d(TAG, "Feature " + feature + " all settings " + all.settings)
+                return@zip Pair(available, all)
+            }
+        }
+            .observeOn(AndroidSchedulers.mainThread())
+            .toFlowable()
+            .map { sensorSettings: Pair<PolarSensorSetting, PolarSensorSetting> ->
+                sensorSettings.first.maxSettings()
+            }
     }
 }
